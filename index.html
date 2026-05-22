@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WMS 現場行動工作台 - 終極全功能版</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        /* 基礎全域設定 */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f9; margin: 0; padding: 12px; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; }
+        
+        /* 頁籤設計 */
+        .tabs { display: flex; gap: 6px; margin-bottom: 15px; }
+        .tab-btn { flex: 1; padding: 12px 6px; font-size: 16px; font-weight: bold; border: 2px solid #dee2e6; background: #e9ecef; border-radius: 10px; cursor: pointer; color: #495057; transition: 0.2s; white-space: nowrap; }
+        .tab-btn.active { background: #007bff; color: white; border-color: #007bff; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* 卡片與表單排版 */
+        .card { background: #fff; padding: 20px; border-radius: 14px; border: 2px solid #dee2e6; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .label { display: block; font-size: 15px; font-weight: bold; margin-bottom: 6px; color: #555; }
+        .input { width: 100%; font-size: 18px; padding: 12px; border: 2px solid #ccc; border-radius: 8px; box-sizing: border-box; margin-bottom: 15px; background: #fff; }
+        .input:focus { border-color: #007bff; outline: none; box-shadow: 0 0 0 3px rgba(0,123,255,0.1); }
+        .row { display: flex; gap: 10px; }
+        
+        /* 按鈕設計 */
+        .btn-scan { width: 100%; padding: 18px; font-size: 22px; font-weight: bold; background: #FFD700; border: 2px solid #e6b800; border-radius: 10px; cursor: pointer; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .btn-scan:active { background: #e6b800; }
+        .btn { width: 100%; padding: 16px; font-size: 20px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; transition: 0.1s; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-success:active { background: #218838; }
+        .btn-edit { background: transparent; border: 2px solid #ffc107; color: #856404; }
+        .btn-edit:active { background: #fff3cd; }
+        .btn-cancel { background: #6c757d; color: white; margin-top: 10px; }
+        
+        /* 唯讀顯示大字體 */
+        .data-value { font-size: 24px; font-weight: bold; margin-bottom: 16px; color: #111; }
+        .loc-value { font-size: 36px; font-weight: bold; color: #0056b3; margin-bottom: 16px; letter-spacing: 1px; }
+        .stock-value { font-size: 40px; font-weight: bold; margin-bottom: 10px; text-align: center; background: #e9ecef; padding: 10px; border-radius: 10px; }
+        
+        /* 🚀 快速調整大按鈕專屬樣式 (Grid) */
+        .quick-adjust-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; background: #f8f9fa; padding: 15px; border-radius: 12px; border: 2px dashed #ccc; }
+        .btn-adjust { font-size: 26px; font-weight: bold; padding: 18px 0; border-radius: 10px; border: none; cursor: pointer; color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.15); }
+        .btn-adjust.minus { background-color: #dc3545; }
+        .btn-adjust.minus:active { background-color: #c82333; transform: scale(0.95); }
+        .btn-adjust.plus { background-color: #28a745; }
+        .btn-adjust.plus:active { background-color: #218838; transform: scale(0.95); }
+
+        /* 📊 資料庫表格專屬樣式 */
+        .table-responsive { width: 100%; overflow-x: auto; margin-top: 10px; border: 1px solid #dee2e6; border-radius: 8px; }
+        .wms-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 15px; background: #fff; min-width: 450px; }
+        .wms-table th, .wms-table td { padding: 12px 10px; border-bottom: 1px solid #dee2e6; }
+        .wms-table th { background: #f1f3f5; font-weight: bold; color: #495057; }
+        .wms-table tr:last-child td { border-bottom: none; }
+        .wms-table tr:hover { background-color: #f8f9fa; }
+        .btn-sm { padding: 6px 10px; font-size: 13px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; margin-right: 4px; }
+        .btn-table-view { background: #007bff; color: white; }
+        .btn-table-del { background: #dc3545; color: white; }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('tab-add')">🆕 新增商品</button>
+        <button class="tab-btn" onclick="switchTab('tab-edit')">🔍 掃碼/微調</button>
+        <button class="tab-btn" onclick="switchTab('tab-db')">📊 資料庫總覽</button>
+    </div>
+
+    <div id="tab-add" class="tab-content active">
+        <div class="card">
+            <h3 style="margin-top: 0; text-align: center; color: #333;">建立新商品主檔</h3>
+            <form onsubmit="addNewProduct(event)">
+                <label class="label">1. 掃描或輸入新條碼 *</label>
+                <input type="text" id="add-barcode" class="input" placeholder="請填寫條碼" required autocomplete="off">
+                
+                <label class="label">2. 商品名稱 *</label>
+                <input type="text" id="add-name" class="input" placeholder="例如：百威啤酒 330ml" required>
+                
+                <label class="label">3. 儲位位置 (Location) *</label>
+                <input type="text" id="add-location" class="input" placeholder="例如：A01-R-1" required oninput="this.value = this.value.toUpperCase()">
+                
+                <label class="label">4. 初始庫存 (箱)</label>
+                <input type="number" id="add-stock" class="input" value="0" min="0" style="font-weight: bold;">
+                
+                <label class="label">5. 可否當柱子 (耐壓屬性)</label>
+                <select id="add-pillar" class="input" style="height: 50px;">
+                    <option value="true">🟩 YES (可當柱子 / 放底層)</option>
+                    <option value="false">🟥 NO (不可當柱子 / 怕壓)</option>
+                </select>
+
+                <button type="submit" class="btn btn-success">💾 儲存至資料庫</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="tab-edit" class="tab-content">
+        <div class="card">
+            <button onclick="startScanner()" class="btn-scan">📷 啟動相機掃描</button>
+            <div id="reader" class="hidden" style="width: 100%; border: 2px solid #ccc; border-radius: 8px; margin-bottom: 15px; overflow: hidden;"></div>
+            
+            <div class="row">
+                <input type="text" id="search-barcode" class="input" placeholder="手動輸入條碼..." style="margin-bottom: 0;" autocomplete="off">
+                <button onclick="fetchProduct(document.getElementById('search-barcode').value)" class="btn btn-success" style="width: 90px; padding: 10px; margin: 0;">搜尋</button>
+            </div>
+        </div>
+
+        <div id="product-card" class="card hidden">
+            <h3 id="card-title" style="margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; color: #444;">🔍 商品即時狀態</h3>
+            
+            <div id="view-mode">
+                <label class="label">商品名稱：</label>
+                <div id="view-name" class="data-value"></div>
+
+                <div class="row">
+                    <div style="flex: 1;">
+                        <label class="label">儲位位置：</label>
+                        <div id="view-location" class="loc-value"></div>
+                    </div>
+                    <div style="flex: 1;">
+                        <label class="label">可當柱子：</label>
+                        <div id="view-pillar" class="data-value" style="font-size: 20px; margin-top: 8px;"></div>
+                    </div>
+                </div>
+
+                <label class="label">目前庫存 (箱)：</label>
+                <div id="view-stock" class="stock-value"></div>
+
+                <div class="quick-adjust-grid">
+                    <button class="btn-adjust minus" onclick="quickAdjustStock(-10)">-10</button>
+                    <button class="btn-adjust minus" onclick="quickAdjustStock(-5)">-5</button>
+                    <button class="btn-adjust minus" onclick="quickAdjustStock(-1)">-1</button>
+                    
+                    <button class="btn-adjust plus" onclick="quickAdjustStock(1)">+1</button>
+                    <button class="btn-adjust plus" onclick="quickAdjustStock(5)">+5</button>
+                    <button class="btn-adjust plus" onclick="quickAdjustStock(10)">+10</button>
+                </div>
+
+                <button onclick="toggleEditMode(true)" class="btn btn-edit">⚙️ 進階修改 (改條碼/儲位/屬性)</button>
+            </div>
+
+            <div id="edit-mode" class="hidden">
+                <label class="label">商品名稱：</label>
+                <input type="text" id="edit-name" class="input">
+
+                <label class="label">綁定條碼：</label>
+                <input type="text" id="edit-barcode" class="input">
+
+                <label class="label">儲位位置：</label>
+                <input type="text" id="edit-location" class="input" oninput="this.value = this.value.toUpperCase()">
+
+                <label class="label">庫存 (箱)：</label>
+                <input type="number" id="edit-stock" class="input" style="font-weight: bold; font-size: 24px;">
+
+                <label class="label">可否當柱子：</label>
+                <select id="edit-pillar" class="input" style="height: 50px;">
+                    <option value="true">🟩 YES</option>
+                    <option value="false">🟥 NO</option>
+                </select>
+
+                <div class="row">
+                    <button onclick="toggleEditMode(false)" class="btn btn-cancel" style="flex: 1; margin-top: 0;">取消</button>
+                    <button onclick="saveProduct()" class="btn btn-success" style="flex: 2; margin-top: 0;">💾 儲存修改</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="tab-db" class="tab-content">
+        <div class="card">
+            <h3 style="margin-top: 0; text-align: center; color: #333;">📊 庫存主檔清單</h3>
+
+<div class="table-responsive">
+                <table class="wms-table">
+                    <thead>
+                        <tr>
+                            <th>儲位</th>
+                            <th>商品名稱</th>
+                            <th>庫存</th>
+                            <th>柱子</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="db-table-body">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // ==================== 1. 虛擬資料庫 (模擬 PostgreSQL) ====================
+    let mockDB = {
+        "4710123456781": { barcode: "4710123456781", name: "海尼根啤酒 330ml", location: "A03-R-2", stock: 48, can_be_pillar: true },
+        "4710123456782": { barcode: "4710123456782", name: "純喫茶綠茶 650ml", location: "B01-L-5", stock: 12, can_be_pillar: false }
+    };
+
+    let currentBarcode = "";
+    let html5QrCode;
+
+    // ==================== 2. 頁籤切換邏輯 ====================
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        
+        // 自動點亮對應按鈕
+        const targetBtn = document.querySelector(`.tab-btn[onclick*="${tabId}"]`);
+        if (targetBtn) targetBtn.classList.add('active');
+        
+        document.getElementById(tabId).classList.add('active');
+        
+        // 🚀 重點：如果切換到資料庫總覽，立刻重新繪製表格
+        if (tabId === 'tab-db') {
+            renderDatabaseTable();
+        }
+        
+        // 切換頁籤時主動關閉相機
+        if (html5QrCode && html5QrCode.isScanning) {
+            html5QrCode.stop().then(() => { document.getElementById('reader').classList.add('hidden'); });
+        }
+    }
+
+    // ==================== 3. 📊 動態渲染資料庫表格 ====================
+    function renderDatabaseTable() {
+        const tbody = document.getElementById('db-table-body');
+        tbody.innerHTML = ""; // 先清空舊資料
+
+        const keys = Object.keys(mockDB);
+        if (keys.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#999; padding:20px;">目前資料庫空空如也</td></tr>`;
+            return;
+        }
+
+        // 依據「儲位」進行排序，方便倉庫人員查找
+        keys.sort((a, b) => mockDB[a].location.localeCompare(mockDB[b].location));
+
+        keys.forEach(barcode => {
+            const item = mockDB[barcode];
+            const tr = document.createElement('tr');
+            
+            tr.innerHTML = `
+                <td style="font-weight:bold; color:#0056b3;">${item.location}</td>
+                <td>
+                    <div style="font-weight:bold;">${item.name}</div>
+                    <div style="font-size:11px; color:#888;">${item.barcode}</div>
+                </td>
+                <td style="font-weight:bold; color:${item.stock <= 10 ? '#dc3545' : '#28a745'}">${item.stock} 箱</td>
+                <td>${item.can_be_pillar ? '🟩' : '🟥'}</td>
+                <td>
+                    <button class="btn-sm btn-table-view" onclick="locateAndEdit('${item.barcode}')">🔍 調整</button>
+                    <button class="btn-sm btn-table-del" onclick="deleteProduct('${item.barcode}', '${item.name}')">🗑️</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // ==================== 4. 🔗 連動功能：從列表點擊跳到編輯 ====================
+    function locateAndEdit(barcode) {
+        // 1. 自動填入第二頁籤的搜尋欄
+        document.getElementById('search-barcode').value = barcode;
+        // 2. 切換到第二頁籤
+        switchTab('tab-edit');
+        // 3. 自動執行查詢，把大按鈕調庫存卡片叫出來
+        fetchProduct(barcode);
+    }
+
+    // ==================== 5. 🗑️ 刪除商品功能 ====================
+    function deleteProduct(barcode, name) {
+        if (confirm(`確定要從資料庫徹底刪除【${name}】嗎？\n此操作不可逆！`)) {
+            delete mockDB[barcode];
+            alert("已成功刪除商品。");
+            renderDatabaseTable(); // 重新整理表格
+        }
+    }
+
+    // ==================== 6. 新增商品 (POST) ====================
+    function addNewProduct(event) {
+        event.preventDefault();
+        const barcode = document.getElementById('add-barcode').value.trim();
+        
+        if (mockDB[barcode]) {
+            return alert(`❌ 失敗：條碼 [${barcode}] 已經存在！\n品名：${mockDB[barcode].name}`);
+        }
+
+        mockDB[barcode] = {
+            barcode: barcode,
+            name: document.getElementById('add-name').value.trim(),
+            location: document.getElementById('add-location').value.trim(),
+            stock: parseInt(document.getElementById('add-stock').value) || 0,
+            can_be_pillar: document.getElementById('add-pillar').value === "true"
+        };
+
+        alert("🎉 新增成功！");
+        event.target.reset(); 
+        document.getElementById('add-stock').value = 0;
+    }
+
+    // ==================== 7. 啟動相機掃描 ====================
+    function startScanner() {
+        const reader = document.getElementById('reader');
+        reader.classList.remove('hidden');
+        document.getElementById('product-card').classList.add('hidden');
+
+        html5QrCode = new Html5Qrcode("reader");
+        html5QrCode.start(
+            { facingMode: "environment" },
+            { fps: 10, qrbox: { width: 250, height: 150 } },
+            (decodedText) => {
+                html5QrCode.stop().then(() => {
+                    reader.classList.add('hidden');
+                    document.getElementById('search-barcode').value = decodedText;
+                    fetchProduct(decodedText);
+                });
+            },
+            (error) => {}
+        ).catch(err => {
+            alert("無法啟動相機，請檢查相機權限！");
+            reader.classList.add('hidden');
+        });
+    }
+
+    // ==================== 8. 查詢與顯示商品 (GET) ====================
+    function fetchProduct(barcode) {
+        barcode = barcode.trim();
+        if (!barcode) return alert("請輸入條碼");
+
+        const product = mockDB[barcode];
+        if (!product) {
+            document.getElementById('product-card').classList.add('hidden');
+            return alert(`❌ 資料庫找不到條碼：${barcode}\n\n請先至新增商品建立主檔。`);
+        }
+
+        currentBarcode = barcode;
+        
+        document.getElementById('view-name').innerText = product.name;
+        document.getElementById('view-location').innerText = product.location;
+        
+        const stockEl = document.getElementById('view-stock');
+        stockEl.innerText = product.stock;
+        stockEl.style.color = product.stock <= 10 ? '#dc3545' : '#28a745';
+
+        const pillarEl = document.getElementById('view-pillar');
+        pillarEl.innerText = product.can_be_pillar ? "🟩 YES" : "🟥 NO";
+
+        toggleEditMode(false);
+        document.getElementById('product-card').classList.remove('hidden');
+    }
+
+    // ==================== 9. 🚀 快速庫存調整 (PUT) ====================
+    function quickAdjustStock(amount) {
+        if (!currentBarcode || !mockDB[currentBarcode]) return;
+
+        let currentStock = mockDB[currentBarcode].stock;
+        let newStock = currentStock + amount;
+        
+        if (newStock < 0) newStock = 0; // 防呆
+        
+        mockDB[currentBarcode].stock = newStock;
+        fetchProduct(currentBarcode); // 瞬間重繪畫面
+    }
+
+    // ==================== 10. 切換 唯讀 / 進階編輯 模式 ====================
+    function toggleEditMode(isEditing) {
+        const viewMode = document.getElementById('view-mode');
+        const editMode = document.getElementById('edit-mode');
+        const cardTitle = document.getElementById('card-title');
+        
+        if (isEditing) {
+            const p = mockDB[currentBarcode];
+            document.getElementById('edit-name').value = p.name;
+            document.getElementById('edit-barcode').value = p.barcode;
+            document.getElementById('edit-location').value = p.location;
+            document.getElementById('edit-stock').value = p.stock;
+            document.getElementById('edit-pillar').value = p.can_be_pillar ? "true" : "false";
+
+            viewMode.classList.add('hidden');
+            editMode.classList.remove('hidden');
+            cardTitle.innerText = "✏️ 進階修改商品資料";
+        } else {
+            viewMode.classList.remove('hidden');
+            editMode.classList.add('hidden');
+            cardTitle.innerText = "🔍 商品即時狀態";
+        }
+    }
+
+    // ==================== 11. 儲存進階修改 ====================
+    function saveProduct() {
+        const newBarcode = document.getElementById('edit-barcode').value.trim();
+        const newName = document.getElementById('edit-name').value.trim();
+        const newLocation = document.getElementById('edit-location').value.trim();
+        const newStock = parseInt(document.getElementById('edit-stock').value) || 0;
+        const newPillar = document.getElementById('edit-pillar').value === "true";
+
+        if (!newBarcode || !newName || !newLocation) {
+            return alert("❌ 所有欄位均不可留空！");
+        }
+
+        if (newBarcode !== currentBarcode) {
+            if (mockDB[newBarcode]) return alert(`❌ 阻擋：條碼 ${newBarcode} 已被其他商品使用！`);
+            delete mockDB[currentBarcode];
+        }
+
+        mockDB[newBarcode] = {
+            barcode: newBarcode,
+            name: newName,
+            location: newLocation,
+            stock: newStock,
+            can_be_pillar: newPillar
+        };
+
+        alert("💾 更新成功！");
+        document.getElementById('search-barcode').value = newBarcode;
+        fetchProduct(newBarcode);
+    }
+</script>
+
+</body>
+</html>
